@@ -149,11 +149,13 @@ button.avbtn.on{border-color:var(--accent)!important;box-shadow:0 0 0 2px var(--
 .say.out{opacity:0;transition:opacity .28s}
 @keyframes saypop{from{transform:scale(.7);opacity:0}to{transform:scale(1);opacity:1}}
 @media (prefers-reduced-motion: reduce){.say{animation:none}}
-.fc.holo::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;background-image:var(--h0),linear-gradient(115deg,#ff2d95 0%,#ffd23f 18%,#3dffb0 36%,#3da5ff 54%,#b84dff 72%,#ff2d95 90%);background-size:70% 50%,300% 300%;background-blend-mode:overlay;mix-blend-mode:color-dodge;opacity:.5;animation:foil 6s linear infinite}
+.fc.holo::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;background-image:var(--h0),linear-gradient(115deg,#ff2d95 0%,#ffd23f 18%,#3dffb0 36%,#3da5ff 54%,#b84dff 72%,#ff2d95 90%);background-size:70% 50%,300% 300%;background-blend-mode:overlay;mix-blend-mode:soft-light;opacity:.42;animation:foil 7s linear infinite}
 .fc.holo.f1::after{background-image:var(--h1),linear-gradient(115deg,#ff2d95 0%,#ffd23f 18%,#3dffb0 36%,#3da5ff 54%,#b84dff 72%,#ff2d95 90%)}
-.fc.holo.f2::after{background-image:var(--h2),linear-gradient(60deg,#3da5ff 0%,#b84dff 25%,#ff2d95 50%,#ffd23f 75%,#3dffb0 100%);background-blend-mode:multiply;mix-blend-mode:screen;opacity:.6}
+.fc.holo.f2::after{background-image:var(--h2),linear-gradient(60deg,#3da5ff 0%,#b84dff 25%,#ff2d95 50%,#ffd23f 75%,#3dffb0 100%);background-blend-mode:multiply;mix-blend-mode:screen;opacity:.2}
 @keyframes foil{0%{background-position:0% 0%,0% 50%}100%{background-position:140% 100%,300% 50%}}
-.fc.holo{box-shadow:0 0 0 2px #fff,0 0 12px 2px rgba(160,220,255,.7)}
+.fc.holo{box-shadow:0 0 0 2px #fff,0 0 10px 1px rgba(160,220,255,.55)}
+/* the foil keeps clear of the rules text so the card stays readable */
+.fc.holo .fc-t{z-index:2}
 .zone.holo .tile{animation:holoring 3.5s linear infinite}
 @keyframes holoring{0%{box-shadow:inset 0 0 0 4px #ff2d95}25%{box-shadow:inset 0 0 0 4px #ffd23f}50%{box-shadow:inset 0 0 0 4px #3dffb0}75%{box-shadow:inset 0 0 0 4px #3da5ff}100%{box-shadow:inset 0 0 0 4px #ff2d95}}
 @media (prefers-reduced-motion: reduce){.fc.holo::after,.zone.holo .tile{animation:none}}
@@ -4080,6 +4082,7 @@ function vrTex(src,pixel){const t=src instanceof HTMLCanvasElement?new THREE.Can
 function vrPlane(w,h,tex,o){o=o||{};const g=new THREE.PlaneGeometry(w,h);if(o.feet)g.translate(0,h/2,0);
   const m=new THREE.Mesh(g,new THREE.MeshBasicMaterial({map:tex||null,color:o.color!=null?o.color:0xffffff,transparent:!!o.transparent,alphaTest:o.alphaTest!=null?o.alphaTest:(tex?.15:0),side:THREE.DoubleSide,opacity:o.opacity!=null?o.opacity:1,depthWrite:o.depthWrite!==false}));
   if(o.flat)m.rotation.x=-Math.PI/2;return m;}
+function vrBacked(m){m.material.side=THREE.FrontSide;const b=new THREE.Mesh(m.geometry,new THREE.MeshBasicMaterial({map:VR.cbTex,side:THREE.FrontSide}));b.rotation.y=Math.PI;b.position.z=-.0022;m.add(b);m.userData.back=b;return m;}
 function vrWrap(ctx,text,x,y,maxW,lh,maxLines){const words=String(text).split(/\s+/);let line='',n=0;for(const w of words){const t=line?line+' '+w:w;if(ctx.measureText(t).width>maxW&&line){ctx.fillText(line,x,y+n*lh);n++;line=w;if(maxLines&&n>=maxLines)return n;}else line=t;}if(line){ctx.fillText(line,x,y+n*lh);n++;}return n;}
 /* a small text label on its own canvas */
 function vrLabel(w,h,pxW){const cv=document.createElement('canvas');cv.width=pxW||256;cv.height=Math.round(cv.width*h/w);const ctx=cv.getContext('2d'),tex=vrTex(cv),mesh=vrPlane(w,h,tex,{transparent:true,alphaTest:.05});
@@ -4172,7 +4175,7 @@ function vrBuild(){
   VR.handG=new THREE.Group();rig.add(VR.handG);VR.hand=new THREE.Group();VR.handG.add(VR.hand);VR.handCards=[];
   {const hd=vrPlane(.3,.022,null,{color:0xd9b24a});hd.position.set(0,-.1,.03);hd.rotation.x=-.55;hd.userData.handle=true;VR.handG.add(hd);VR.click.push(hd);}
   VR.panelG=new THREE.Group();rig.add(VR.panelG);
-  VR.detail=vrPlane(.25,.3516,null,{});VR.detail.position.set(0,.42,0);VR.detail.visible=false;VR.panelG.add(VR.detail);
+  VR.detail=vrBacked(vrPlane(.21,.2954,null,{}));VR.detail.position.set(0,.2,.03);VR.detail.rotation.x=-.4;VR.detail.visible=false;VR.handG.add(VR.detail);
   const pc=VR.pcv=document.createElement('canvas');pc.width=1024;pc.height=704;VR.pctx=pc.getContext('2d');VR.ptex=vrTex(pc);
   VR.panel=vrPlane(.64,.44,VR.ptex,{alphaTest:0});VR.panelG.add(VR.panel);VR.regions=[];vrHome();
   VR.panel.userData.click=hit=>{if(!hit.uv)return;const px=hit.uv.x*1024,py=(1-hit.uv.y)*704;for(const r of VR.regions)if(px>=r.x&&px<=r.x+r.w&&py>=r.y&&py<=r.y+r.h){r.fn();return;}};VR.click.push(VR.panel);
@@ -4200,7 +4203,7 @@ function vrGlove(left){
   box(.02,.02,.085,.0,.034,-.09,0xffffff);                            /* index, pointing */
   for(const [y,len] of [[.011,.05],[-.012,.048],[-.034,.042]]){box(.02,.02,len,.006,y,-.05-len/2+.02,0xf1f3f7);box(.02,.02,.03,.022,y,-.06,0xe3e6ee);}  /* curled fingers */
   const th=box(.022,.022,.06,.012,.056,-.03,0xf7f8fb);th.rotation.x=.35;
-  if(!left)g.scale.x=-1;g.rotation.x=-.35;return g;
+  if(!left)g.scale.x=-1;g.rotation.x=-Math.PI/4;return g;
 }
 const vrPulse=(ci,s,ms)=>{try{const src=VR.ctrl&&VR.ctrl[ci]&&VR.ctrl[ci].userData.src,h=src&&src.gamepad&&src.gamepad.hapticActuators&&src.gamepad.hapticActuators[0];if(h&&h.pulse)h.pulse(s,ms);}catch(e){}};
 /* --- grabbing with the grip button: the table (which stays level), the hand, the panel --- */
@@ -4238,14 +4241,16 @@ function vrSqueezeEnd(ci){
   if(g&&g.obj===VR.deckG){   /* let go of the deck next to your other hand and it stays on that hand */
     const a=new THREE.Vector3(),b=new THREE.Vector3().setFromMatrixPosition(VR.ctrl[ot].matrixWorld);VR.deckG.getWorldPosition(a);
     if(VR.ctrl[ot].visible&&a.distanceTo(b)<.22){const lf=(VR.ctrl[ot].userData.src&&VR.ctrl[ot].userData.src.handedness)!=='right',host=VR.grip?VR.grip[ot]:VR.ctrl[ot];host.add(VR.deckG);
-      VR.deckG.position.set(lf?-.045:.045,.0,.17);VR.deckG.rotation.set(-.35,0,lf?Math.PI/2:-Math.PI/2,'ZXY');VR.deckG.scale.setScalar(.8);VR.deckDock=ot;vrPulse(ot,.6,60);}}
+      /* straight back along the forearm from the hand, lying on the back of the wrist */
+      const s=Math.SQRT1_2,up=new THREE.Vector3(lf?-1:1,0,0),back=new THREE.Vector3(0,s,s),side=new THREE.Vector3().crossVectors(up,back);
+      VR.deckG.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(side,up,back));VR.deckG.position.copy(back).multiplyScalar(.16).addScaledVector(up,.045);VR.deckG.scale.setScalar(.8);VR.deckDock=ot;vrPulse(ot,.6,60);}}
   if(g){VR.grab[ci]=null;if(g.scaleOnly){VR.scaling=null;}else if(g.obj===VR.root&&VR.scaling){VR.scaling=null;VR.grab[ot]=null;}}
 }
 /* --- holding a hand card: stick chooses how to play it, holding the trigger confirms --- */
 function vrHoldStart(ci,i){
   const hand=myHand(),id=hand[i];if(id==null||VR.held)return;const dom=$('hand').children[i];if(dom&&!dom.classList.contains('sel'))dom.click();
   const opts=myTurn()?[...$('dacts').querySelectorAll('button')]:[],c=VR.ctrl[ci];
-  const mesh=vrPlane(.105,.1477,vrCard(id).tex,{alphaTest:0});mesh.position.set(0,.035,-.1);mesh.rotation.x=-.7;c.add(mesh);
+  const mesh=vrBacked(vrPlane(.105,.1477,vrCard(id).tex,{alphaTest:0}));mesh.position.set(0,.035,-.1);mesh.rotation.x=-.7;c.add(mesh);
   const label=vrLabel(.3,.05,512);label.mesh.position.set(0,.105,0);mesh.add(label.mesh);const hint=vrLabel(.3,.03,512);hint.mesh.position.set(0,-.1,0);mesh.add(hint.mesh);
   const bar=vrPlane(.3,.008,null,{color:0xffc21f});bar.position.set(0,.075,.001);bar.scale.x=.001;mesh.add(bar);
   VR.held={ci,i,id,opts,k:0,mesh,label,hint,bar,lock:false,face:true};VR.sig.hand=null;c.userData.trig=null;
@@ -4256,7 +4261,7 @@ function vrHoldStep(now){
   const mag=Math.max(Math.abs(x),Math.abs(y));if(mag>.6&&!H.lock&&n>1){H.lock=true;H.k=(H.k+((Math.abs(x)>Math.abs(y)?x:y)>0?1:-1)+n)%n;vrPulse(H.ci,.3,30);sfx('click',.3);}if(mag<.3)H.lock=false;
   const text=n?H.opts[H.k].textContent.trim():(G&&G.turn===0&&!partnerTurn()?'Cannot be played right now':'Not your turn');
   H.label.set(text,{bg:n?'#267ae9':'#55546b',color:'#fff',size:.6});H.hint.set(n?(n>1?'Stick: change   ·   Hold trigger: confirm':'Hold trigger: confirm'):'Let go to put it back',{bg:'#17132e',color:'#ffe9a8',size:.62});
-  const down=/face-down/i.test(text);if(down!==!H.face){H.face=!down;H.mesh.material.map=down?VR.cbTex:vrCard(H.id).tex;H.mesh.material.needsUpdate=true;H.mesh.rotation.z=down?Math.PI/2:0;H.label.mesh.rotation.z=H.hint.mesh.rotation.z=H.bar.rotation.z=down?-Math.PI/2:0;
+  const down=/face-down/i.test(text);if(down!==!H.face){H.face=!down;H.mesh.material.map=down?VR.cbTex:vrCard(H.id).tex;H.mesh.material.needsUpdate=true;H.mesh.userData.back.material.map=down?vrCard(H.id).tex:VR.cbTex;H.mesh.userData.back.material.needsUpdate=true;H.mesh.rotation.z=down?Math.PI/2:0;H.label.mesh.rotation.z=H.hint.mesh.rotation.z=H.bar.rotation.z=down?-Math.PI/2:0;
     H.label.mesh.position.set(down?-.105:0,down?0:.105,0);H.hint.mesh.position.set(down?.1:0,down?0:-.1,0);H.bar.position.set(down?-.075:0,down?0:.075,.001);}
   const p=n&&c.userData.trig?Math.min(1,(now-c.userData.trig)/700):0;H.bar.scale.x=Math.max(.001,p);
   if(p>=1){const b=H.opts[H.k];vrPulse(H.ci,.8,80);vrHoldEnd();try{b.click();}catch(e){console.error(e);}}
@@ -4369,7 +4374,7 @@ function vrSync(camLocal){
    VR.pendingDraw=Math.max(0,Math.min(VR.pendingDraw,hand.length));if(!VR.session)VR.pendingDraw=0;}
   const shown=hand.length-VR.pendingDraw,hs=hand.join(',')+'|'+shown+'|'+(VR.held?VR.held.i:-1)+'|'+[...$('hand').children].map(e=>(e.classList.contains('sel')?'s':'')+(e.classList.contains('can')?'c':'')).join('');
   if(hs!==VR.sig.hand){VR.sig.hand=hs;const old=VR.handCards.slice();for(const o of old){VR.hand.remove(o);const i=VR.click.indexOf(o);if(i>=0)VR.click.splice(i,1);}VR.handCards=[];
-    const n=shown,sp=Math.min(.115,.78/Math.max(1,n));hand.slice(0,shown).forEach((id,i)=>{if(VR.held&&VR.held.i===i)return;const dom=$('hand').children[i],p=vrPlane(.105,.1477,vrCard(id).tex,{alphaTest:0}),t=i-(n-1)/2,sel=dom&&dom.classList.contains('sel');
+    const n=shown,sp=Math.min(.115,.78/Math.max(1,n));hand.slice(0,shown).forEach((id,i)=>{if(VR.held&&VR.held.i===i)return;const dom=$('hand').children[i],p=vrBacked(vrPlane(.105,.1477,vrCard(id).tex,{alphaTest:0})),t=i-(n-1)/2,sel=dom&&dom.classList.contains('sel');
       p.userData.tp=new THREE.Vector3(t*sp,(sel?.045:0)-Math.abs(t)*.004,Math.abs(t)*.012+i*.0012);p.userData.ry=-t*.07;p.rotation.set(-.55,p.userData.ry,0);p.userData.click=()=>{const d=$('hand').children[i];if(d)d.click();};p.userData.card=true;p.userData.idx=i;p.userData.id=id;
       const k=old.findIndex(o=>o&&o.userData.id===id);
       if(k>=0){p.position.copy(old[k].position);p.rotation.y=old[k].rotation.y;old[k]=null;}
@@ -4377,13 +4382,14 @@ function vrSync(camLocal){
       else p.position.copy(p.userData.tp);
       if(dom&&dom.classList.contains('can')){const g=vrPlane(.113,.1557,null,{color:0x3fbf7a});g.position.z=-.001;p.add(g);}
       if(isHolo(id)){const f=foilOf(id);VR.foil=VR.foil||[];if(!VR.foil[f]){const ft=vrTex(vrVarImg('--h'+f));ft.wrapS=ft.wrapT=THREE.RepeatWrapping;ft.repeat.set(.6,.6);VR.foil[f]=ft;}
-        const o=new THREE.Mesh(new THREE.PlaneGeometry(.105,.1477),new THREE.MeshBasicMaterial({map:VR.foil[f],transparent:true,opacity:.42,blending:THREE.AdditiveBlending,depthWrite:false}));o.position.z=.0006;p.add(o);}
+        const o=new THREE.Mesh(new THREE.PlaneGeometry(.105,.1477),new THREE.MeshBasicMaterial({map:VR.foil[f],transparent:true,opacity:.14,blending:THREE.AdditiveBlending,depthWrite:false}));o.position.z=.0006;p.add(o);}
       VR.hand.add(p);VR.handCards.push(p);VR.click.push(p);});}
   if(VR.foil&&camLocal)for(const ft of VR.foil)if(ft)ft.offset.set((camLocal.x*.9+now/7000)%1,(camLocal.y*.6+now/11000)%1);
   for(const p of VR.handCards){const k=reduce?1:.14;p.position.lerp(p.userData.tp,k);p.rotation.y+=(p.userData.ry-p.rotation.y)*k;if(p!==VR.hover)p.scale.setScalar(p.scale.x+(1-p.scale.x)*k);}
   /* the selected card, enlarged at your left */
-  if(detKey!=null&&CARD(detKey)){const k='d'+detKey;if(VR.sig.det!==k){VR.sig.det=k;VR.detail.material.map=vrCard(detKey).tex;VR.detail.material.needsUpdate=true;}VR.detail.visible=true;}else{VR.detail.visible=false;VR.sig.det=null;}
-  vrPanel();{const on=VR.panelOff!==true||!$('modal').hidden||!!VR.inline;VR.panel.visible=on;if(!on)VR.detail.visible=false;}
+  if(detKey!=null&&CARD(detKey)){const k='d'+detKey;if(VR.sig.det!==k){VR.sig.det=k;VR.detail.material.map=vrCard(detKey).tex;VR.detail.material.needsUpdate=true;}VR.detail.visible=true;
+    const hc=sel&&sel.src==='hand'?VR.handCards.find(p=>p.userData.idx===sel.i):null,tx=hc?hc.userData.tp.x:0;VR.detail.position.x+=(tx-VR.detail.position.x)*(reduce?1:.2);}else{VR.detail.visible=false;VR.sig.det=null;}
+  vrPanel();{const on=VR.panelOff!==true||!$('modal').hidden||!!VR.inline;VR.panel.visible=on;}
   vrSky();
   /* boss entrance */
   if(cine.on&&cine.view){if(VR.sig.boss!==cine.view){VR.sig.boss=cine.view;VR.boss.material.map=vrTex(cine.view.ctx.canvas);VR.boss.material.needsUpdate=true;}VR.boss.material.map.needsUpdate=true;VR.boss.visible=true;VR.bossName.set($('cinename').textContent,{color:'#ffe9a8',size:.6});}
