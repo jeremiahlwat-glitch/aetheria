@@ -4326,7 +4326,7 @@ function vrBuild(){
   const cb=vrVarImg('--cardback'),cbTex=VR.cbTex=vrTex(cb);
   /* table */
   const T=VR.table=new THREE.Group();T.position.set(0,0,-.78);root.add(T);
-  const top=vrPlane(1.42,1.02,null,{flat:true,color:0x17132e,transparent:true,opacity:.93});top.position.y=-.004;T.add(top);top.userData.table=true;top.userData.click=()=>{if(pending&&pending.direct)pending.res({z:-1});};VR.click.push(top);
+  const top=vrPlane(1.42,1.02,null,{flat:true,color:0x17132e,transparent:true,opacity:.93});top.position.y=-.004;T.add(top);top.userData.table=true;top.userData.click=()=>{if(pending&&pending.direct)pending.res({z:-1});else vrMiss();};VR.click.push(top);
   const rim=vrPlane(1.46,1.06,null,{flat:true,color:0xd9b24a});rim.position.y=-.008;T.add(rim);
   const mid=vrPlane(1.2,.07,null,{flat:true,color:0x231c4a});mid.position.y=.001;T.add(mid);
   
@@ -4337,11 +4337,11 @@ function vrBuild(){
   for(const side of [0,1]){const sg=side===0?1:-1,zm=sg*.105,zb=sg*.29;
     for(let z=0;z<5;z++){const xx=(z-2)*VS;
       const t=tile(VS*.93,VS*.93,xx,zm,()=>zv[side][z].tile.click());
-      const stand=vrPlane(1,1,vrTex(zv[side][z].view.ctx.canvas),{feet:true,alphaTest:.3});stand.position.set(xx,.004,zm);stand.visible=false;T.add(stand);
-      const down=vrPlane(VS*.56,VS*.78,cbTex,{flat:true});down.position.set(xx,.006,zm);down.visible=false;T.add(down);
+      const stand=vrPlane(1,1,vrTex(zv[side][z].view.ctx.canvas),{feet:true,alphaTest:.3});stand.position.set(xx,.004,zm);stand.visible=false;T.add(stand);stand.userData.alpha=zv[side][z].view.ctx.canvas;stand.userData.click=h=>t.userData.click(h);stand.userData.table=true;VR.click.push(stand);
+      const down=vrPlane(VS*.56,VS*.78,cbTex,{flat:true});down.position.set(xx,.006,zm);down.visible=false;T.add(down);down.userData.click=h=>t.userData.click(h);down.userData.table=true;VR.click.push(down);
       const lab=vrLabel(VS*.9,VS*.2,192);lab.mesh.rotation.x=-Math.PI/2.6;lab.mesh.position.set(xx,.02,zm+sg*VS*.52);if(side===1)lab.mesh.position.z=zm+VS*.52;T.add(lab.mesh);
       VR.mz[side][z]={tile:t,stand,down,lab,off:0,fade:1};
-      const bt=tile(VS*.93,VS*.62,xx,zb,()=>bzEl[side][z].tile.click());const bc=vrPlane(VS*.42,VS*.58,cbTex,{flat:true});bc.position.set(xx,.006,zb);bc.visible=false;T.add(bc);VR.bz[side][z]={tile:bt,card:bc};
+      const bt=tile(VS*.93,VS*.62,xx,zb,()=>bzEl[side][z].tile.click());const bc=vrPlane(VS*.42,VS*.58,cbTex,{flat:true});bc.position.set(xx,.006,zb);bc.visible=false;T.add(bc);bc.userData.click=h=>bt.userData.click(h);bc.userData.table=true;VR.click.push(bc);VR.bz[side][z]={tile:bt,card:bc};
     }
     const tx=-3*VS,tt=tile(VS*.93,VS*1.6,tx,sg*.2,()=>tzEl[side].tile.click());const tl=vrLabel(VS*.9,VS*.3,256);tl.mesh.rotation.x=-Math.PI/2;tl.mesh.position.set(tx,.007,sg*.2);T.add(tl.mesh);VR.tz[side]={tile:tt,lab:tl};
     const dx=3*VS,box=new THREE.Mesh(new THREE.BoxGeometry(VS*.6,1,VS*.84),[0,1,2,3,4,5].map(i=>new THREE.MeshBasicMaterial(i===2?{map:cbTex}:{color:0x231c4a})));
@@ -4350,7 +4350,8 @@ function vrBuild(){
     else{   /* your own deck floats free: grip it to move it, drop it on your other hand to wear it there */
       const DG=VR.deckG=new THREE.Group();rig.add(DG);const inner=VR.deckIn=new THREE.Group();DG.add(inner);inner.add(box);inner.add(dl.mesh);dl.mesh.position.set(0,.14,0);
       const base=vrPlane(VS*.74,VS*.98,null,{flat:true,color:0xd9b24a});base.position.y=-.004;inner.add(base);
-      box.userData.deck=true;box.userData.click=()=>{if(VR.pendingDraw>0)vrDrawDone();};VR.click.push(box);VR.deckDock=-1;}
+      box.userData.deck=true;box.userData.click=()=>{if(VR.pendingDraw>0)vrDrawDone();};VR.click.push(box);VR.deckDock=-1;
+      const slot=vrPlane(VS*.8,VS*1.04,null,{flat:true,color:0x3a3566});slot.position.set(dx,.002,.2);T.add(slot);const sl=vrLabel(VS*.7,VS*.2,160);sl.mesh.rotation.x=-Math.PI/2;sl.mesh.position.set(dx,.004,.2);sl.set('Deck',{color:'#8a88a8',size:.6});T.add(sl.mesh);}
     const chTex=[0,1].map(()=>{const t=vrTex(vrVarImg('--chibi'),true);t.repeat.set(1/6,1/80);return t;});
     const ch=chTex.map((t,i)=>{const p=vrPlane(.075,.108,t,{feet:true,alphaTest:.3});p.position.set(dx+(i?.05:-.03),.004,sg*(.2+.14));T.add(p);return p;});
     VR.deck[side]={box,lab:dl,ch,chTex};
@@ -4420,12 +4421,12 @@ function vrGrabStep(ci){
 function vrSqueezeStart(ci){
   const c=VR.ctrl[ci],ot=1-ci;
   {const cp=new THREE.Vector3().setFromMatrixPosition(c.matrixWorld),dp=new THREE.Vector3();VR.deckG.getWorldPosition(dp);
-   if(cp.distanceTo(dp)<.16&&VR.deckDock!==ci){if(VR.pendingDraw>0)vrDrawStart(ci);else{if(VR.deckDock>=0){VR.rig.attach(VR.deckG);VR.deckG.scale.setScalar(1);VR.deckDock=-1;}vrGrabStart(ci,VR.deckG,false);}vrPulse(ci,.4,40);return;}}
+   if(cp.distanceTo(dp)<.16&&VR.deckDock!==ci){if(VR.pendingDraw>0)vrDrawStart(ci);else{if(VR.deckDock!==-1){VR.rig.attach(VR.deckG);VR.deckG.scale.setScalar(1);VR.deckDock=-1;}vrGrabStart(ci,VR.deckG,false);}vrPulse(ci,.4,40);return;}}
   const h=vrPick(c),o=h&&h.object,d=o?o.userData:{};
   if(VR.grab[ot]&&VR.grab[ot].obj===VR.root&&!(d.card||d.handle||d.deck||o===VR.panel)){   /* second hand on the table: stretch to resize */
     const a=new THREE.Vector3().setFromMatrixPosition(VR.ctrl[0].matrixWorld),b=new THREE.Vector3().setFromMatrixPosition(VR.ctrl[1].matrixWorld);VR.scaling={d0:a.distanceTo(b),s0:VR.root.scale.x};VR.grab[ci]={scaleOnly:true};vrPulse(ci,.4,40);return;}
   if(!o)return;
-  if(d.handle)vrGrabStart(ci,VR.handG,false);else if(o===VR.panel)vrGrabStart(ci,VR.panelG,false);else if(d.card)vrHoldStart(ci,d.idx);else if(d.deck){if(VR.pendingDraw>0)vrDrawStart(ci);else if(VR.deckDock!==ci){if(VR.deckDock>=0){VR.rig.attach(VR.deckG);VR.deckG.scale.setScalar(1);VR.deckDock=-1;}vrGrabStart(ci,VR.deckG,false);}}else if(d.table)vrGrabStart(ci,VR.root,true);else return;
+  if(d.handle)vrGrabStart(ci,VR.handG,false);else if(o===VR.panel)vrGrabStart(ci,VR.panelG,false);else if(d.card)vrHoldStart(ci,d.idx);else if(d.deck){if(VR.pendingDraw>0)vrDrawStart(ci);else if(VR.deckDock!==ci){if(VR.deckDock!==-1){VR.rig.attach(VR.deckG);VR.deckG.scale.setScalar(1);VR.deckDock=-1;}vrGrabStart(ci,VR.deckG,false);}}else if(d.table)vrGrabStart(ci,VR.root,true);else return;
   vrPulse(ci,.4,40);
 }
 function vrSqueezeEnd(ci){
@@ -4434,7 +4435,9 @@ function vrSqueezeEnd(ci){
   if(VR.drawing&&VR.drawing.ci===ci)vrDrawEnd();
   if(g&&g.obj===VR.deckG){   /* let go of the deck next to your other hand and it stays on that hand */
     const a=new THREE.Vector3(),b=new THREE.Vector3().setFromMatrixPosition(VR.ctrl[ot].matrixWorld);VR.deckG.getWorldPosition(a);
-    if(VR.ctrl[ot].visible&&a.distanceTo(b)<.22){const lf=(VR.ctrl[ot].userData.src&&VR.ctrl[ot].userData.src.handedness)!=='right',host=VR.grip?VR.grip[ot]:VR.ctrl[ot];host.add(VR.deckG);
+    const slot=VR.table.localToWorld(new THREE.Vector3(3*VS,.02,.2)),onMat=a.distanceTo(slot)<.16*Math.max(1,VR.root.scale.x);
+    if(onMat){VR.table.add(VR.deckG);VR.deckG.position.set(3*VS,.012,.2);VR.deckG.rotation.set(0,0,0);VR.deckG.scale.setScalar(1);VR.deckDock=-2;vrPulse(ci,.5,50);}
+    else if(VR.ctrl[ot].visible&&a.distanceTo(b)<.22){const lf=(VR.ctrl[ot].userData.src&&VR.ctrl[ot].userData.src.handedness)!=='right',host=VR.grip?VR.grip[ot]:VR.ctrl[ot];host.add(VR.deckG);
       /* straight back along the forearm from the hand, lying on the back of the wrist */
       const s=Math.SQRT1_2,up=new THREE.Vector3(lf?-1:1,0,0),back=new THREE.Vector3(0,s,s),side=new THREE.Vector3().crossVectors(up,back);
       VR.deckG.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(side,up,back));VR.deckG.position.copy(back).multiplyScalar(.16).addScaledVector(up,.045);VR.deckG.scale.setScalar(.8);VR.deckDock=ot;vrPulse(ot,.6,60);}}
@@ -4546,7 +4549,7 @@ function vrSync(camLocal){
     }
     const tz=P.tz,TZ=VR.tz[side],tcl=tzEl[side].el.classList;TZ.tile.material.color.set(tcl.contains('valid')?'#3fbf7a':tz?elColor(tz.c):'#221f45');TZ.lab.set(tz?tz.c.name:'Terrain',{color:tz?'#ffffff':'#8a88a8',size:.34});
     const D=VR.deck[side],n=P.deck.length,hgt=Math.max(.004,n*.0022);D.box.scale.y=hgt;D.box.position.y=hgt/2;D.box.visible=n>0;
-    if(side===0){const free=VR.deckDock<0&&!(VR.grab[0]&&VR.grab[0].obj===VR.deckG)&&!(VR.grab[1]&&VR.grab[1].obj===VR.deckG);VR.deckIn.position.y=free&&!reduce?Math.sin(now/620)*.009:0;VR.deckIn.rotation.y=free&&!reduce?Math.sin(now/1900)*.12:0;}D.lab.set(side===0&&VR.pendingDraw>0?'Draw!':String(n),{bg:side===0&&VR.pendingDraw>0?'#ffa61f':'#17132e',color:side===0&&VR.pendingDraw>0?'#1b1a2b':'#fff',size:.7});D.lab.mesh.position.y=hgt+.05;
+    if(side===0){const free=VR.deckDock===-1&&!(VR.grab[0]&&VR.grab[0].obj===VR.deckG)&&!(VR.grab[1]&&VR.grab[1].obj===VR.deckG);VR.deckIn.position.y=free&&!reduce?Math.sin(now/620)*.009:0;VR.deckIn.rotation.y=free&&!reduce?Math.sin(now/1900)*.12:0;}D.lab.set(side===0&&VR.pendingDraw>0?'Draw!':String(n),{bg:side===0&&VR.pendingDraw>0?'#ffa61f':'#17132e',color:side===0&&VR.pendingDraw>0?'#1b1a2b':'#fff',size:.7});D.lab.mesh.position.y=hgt+.05;
     if(camLocal&&side===1)D.lab.mesh.rotation.y=Math.atan2(camLocal.x-D.lab.mesh.position.x,camLocal.z-(D.lab.mesh.position.z+T.position.z));
     for(const k of [0,1]){const ch=D.ch[k],show=k===0||!!G.tag;ch.visible=show;if(!show)continue;const a=AVS[side][k],act=(G.tag?G.tag.cur[side]:0)===k&&G.turn===side&&!G.over,f=act?[1,0,1,2][Math.floor(now/220)%4]:1;
       D.chTex[k].offset.set(((side===0?3:0)+f)/6,1-(a+1)/80);ch.material.opacity=1;ch.material.color.setHex((G.tag?G.tag.cur[side]:0)===k?0xffffff:0x888899);}
@@ -4570,6 +4573,7 @@ function vrSync(camLocal){
     {const gy=VR.groundY||0;let w;
      if(Pt.side===1){const e=VR.root.localToWorld(new THREE.Vector3(0,0,-1.29)),c=VR.root.localToWorld(new THREE.Vector3(0,0,-.78)),f=e.clone().sub(c);f.y=0;f.normalize();const r=new THREE.Vector3(-f.z,0,f.x);w=e.clone().addScaledVector(f,.5).addScaledVector(r,G.tag?(Pt.k?.45:-.45):0);}
      else w=VR.rig.localToWorld(new THREE.Vector3(-1.0,0,-.3));Pt.p.position.set(w.x,gy,w.z);Pt.say.mesh.position.set(w.x,gy+Pt.h+.18,w.z);
+     if(VR.camW){const sc=Math.max(1,Math.min(14,VR.camW.distanceTo(w)/2.2));Pt.say.mesh.scale.setScalar(sc);Pt.say.mesh.position.y=gy+Pt.h+.06+.13*sc;}   /* speech grows with distance so it can always be read */
      if(VR.camW){const yw=Math.atan2(VR.camW.x-w.x,VR.camW.z-w.z);Pt.p.rotation.y=yw;Pt.say.mesh.rotation.y=yw;}}
     const sb=$('bar'+Pt.side).querySelector('.say'),mine=sb&&(sb.classList.contains('second')?1:0)===Pt.k;Pt.say.set(mine?sb.textContent:'',{bg:'#fffdf5',color:'#1b1a2b',wrap:true});}
   {const sb=$('bar0').querySelector('.say:not(.second)');VR.mySay.set(sb?sb.textContent:'',{bg:'#fffdf5',color:'#1b1a2b',wrap:true});}
@@ -4604,7 +4608,10 @@ function vrSync(camLocal){
 }
 /* what the pointer can hit: the enemy duelists only count while a direct attack is being chosen */
 const vrTargets=()=>VR.click.filter(o=>o.visible&&(!o.parent||o.parent.visible!==false)&&!(o.userData.direct&&!(pending&&pending.direct)));
-function vrPick(obj){VR.ray.ray.origin.setFromMatrixPosition(obj.matrixWorld);VR.ray.ray.direction.set(0,0,-1).transformDirection(obj.matrixWorld);return VR.ray.intersectObjects(vrTargets(),false)[0]||null;}
+function vrFirst(hits){for(const h of hits){const cv=h.object.userData.alpha;if(cv&&h.uv){try{const d=cv.getContext('2d').getImageData(Math.floor(h.uv.x*cv.width),Math.floor((1-h.uv.y)*cv.height),1,1);if(d&&d.data&&d.data[3]<24)continue;}catch(e){}}return h;}return null;}
+function vrPick(obj){VR.ray.ray.origin.setFromMatrixPosition(obj.matrixWorld);VR.ray.ray.direction.set(0,0,-1).transformDirection(obj.matrixWorld);return vrFirst(VR.ray.intersectObjects(vrTargets(),false));}
+/* a click on nothing puts the enlarged card away */
+function vrMiss(){if(sel&&!pending&&!confirmState&&G&&!busy){sel=null;refresh();}}
 function vrFrame(time){
   VR.frames++;VR.dt=Math.min(.1,(time-(VR.last||time))/1000);VR.last=time;if(VR.tick)VR.tick(time);
   const cam=VR.cam,wp=new THREE.Vector3();cam.getWorldPosition(wp);VR.camW=wp;
@@ -4628,7 +4635,7 @@ async function enterVR(ar){
       VR.ctrl=[0,1].map(i=>{const c=r.xr.getController(i);const g=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0),new THREE.Vector3(0,0,-1)]),ln=new THREE.Line(g,new THREE.LineBasicMaterial({color:0xffe27a}));ln.scale.z=1.5;c.add(ln);c.userData.line=ln;
         const gr=r.xr.getControllerGrip(i);VR.scene.add(gr);(VR.grip=VR.grip||[])[i]=gr;
         c.addEventListener('connected',e=>{c.userData.src=e.data;if(gr.userData.glove)gr.remove(gr.userData.glove);gr.userData.glove=vrGlove(e.data.handedness!=='right');gr.add(gr.userData.glove);});c.addEventListener('disconnected',()=>{c.userData.src=null;vrSqueezeEnd(i);});
-        c.addEventListener('selectstart',()=>{c.userData.trig=performance.now();if((VR.held&&VR.held.ci===i)||VR.grab[i]||VR.drawing)return;const h=vrPick(c);if(h&&h.object.userData.click){sfx('select',.3);vrPulse(i,.3,25);try{h.object.userData.click(h);}catch(e){console.error(e);}}});
+        c.addEventListener('selectstart',()=>{c.userData.trig=performance.now();if((VR.held&&VR.held.ci===i)||VR.grab[i]||VR.drawing)return;const h=vrPick(c);if(h&&h.object.userData.click){sfx('select',.3);vrPulse(i,.3,25);try{h.object.userData.click(h);}catch(e){console.error(e);}}else vrMiss();});
         c.addEventListener('selectend',()=>{c.userData.trig=null;});
         c.addEventListener('squeezestart',()=>{try{vrSqueezeStart(i);}catch(e){console.error(e);}});c.addEventListener('squeezeend',()=>{try{vrSqueezeEnd(i);}catch(e){console.error(e);}});
         VR.scene.add(c);return c;});}
@@ -4662,11 +4669,11 @@ function enter3D(){
     const size=()=>{r.setPixelRatio(Math.min(2,window.devicePixelRatio||1));r.setSize(window.innerWidth,window.innerHeight,false);VR.cam.aspect=window.innerWidth/Math.max(1,window.innerHeight);VR.cam.fov=window.innerWidth<window.innerHeight?88:62;VR.cam.updateProjectionMatrix();};size();VR.onSize=size;window.addEventListener('resize',size);
     const ex=$('leave3d');ex.hidden=false;
     let down=null,moved=false;const ndc=e=>new THREE.Vector2(e.clientX/window.innerWidth*2-1,-(e.clientY/window.innerHeight)*2+1);
-    const hitAt=e=>{VR.ray.setFromCamera(ndc(e),VR.cam);return VR.ray.intersectObjects(vrTargets(),false)[0]||null;};
+    const hitAt=e=>{VR.ray.setFromCamera(ndc(e),VR.cam);return vrFirst(VR.ray.intersectObjects(vrTargets(),false));};
     VR.ptr={down:e=>{down={x:e.clientX,y:e.clientY,yaw:VR.look.yaw,pitch:VR.look.pitch};moved=false;},
       move:e=>{if(down){const dx=e.clientX-down.x,dy=e.clientY-down.y;if(Math.abs(dx)+Math.abs(dy)>6)moved=true;if(moved){VR.look.yaw=Math.max(-1.3,Math.min(1.3,down.yaw+dx*.004));VR.look.pitch=Math.max(-1.2,Math.min(.5,down.pitch+dy*.004));}}
         else{const h=hitAt(e),hv=h&&h.object.userData.card?h.object:null;if(VR.hover&&VR.hover!==hv)VR.hover.scale.set(1,1,1);if(hv)hv.scale.set(1.18,1.18,1);VR.hover=hv;}},
-      up:e=>{if(down&&!moved){const h=hitAt(e);if(h&&h.object.userData.click){sfx('select',.3);try{h.object.userData.click(h);}catch(x){console.error(x);}}}down=null;}};
+      up:e=>{if(down&&!moved){const h=hitAt(e);if(h&&h.object.userData.click){sfx('select',.3);try{h.object.userData.click(h);}catch(x){console.error(x);}}else vrMiss();}down=null;}};
     cv.addEventListener('pointerdown',VR.ptr.down);cv.addEventListener('pointermove',VR.ptr.move);cv.addEventListener('pointerup',VR.ptr.up);
     const loop=()=>{if(!VR.inline)return;const c=VR.cam;c.position.set(0,1.34,.02);c.rotation.set(VR.look.pitch,VR.look.yaw,0,'YXZ');c.updateMatrixWorld(true);VR.root.updateMatrixWorld(true);
       try{vrSync(VR.root.worldToLocal(c.position.clone()));vrTrailStep();}catch(e){if(!VR.err){VR.err=e;console.error(e);}}
