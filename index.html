@@ -723,6 +723,7 @@ button.avbtn.on{border-color:var(--accent)!important;box-shadow:0 0 0 2px var(--
   <p>A trap cannot be sprung on the turn it was set. Only one trap answers each trigger, and there are no chains: effects happen one at a time in the order they are played. Traps answer an enemy attack, summon or spell, one of your monsters being destroyed in battle, damage from a direct attack, or the start of the enemy's turn.</p>
   <h3>Special ability rules</h3>
   <ul>
+    <li><strong>Setting spells.</strong> A spell, equip or terrain can be set face-down in the back row instead of being played. In a later Main Phase, select it there and choose Activate. In two on two, either duelist of the team can activate it.</li>
     <li><strong>Poison.</strong> A poisoned monster loses 400 ATK and DEF at the end of each of its controller's turns, and is destroyed when its ATK reaches 0. Its plate shows PSN.</li>
     <li><strong>Flip.</strong> A Flip ability happens when the monster is turned face-up, either by you or by being attacked while face-down. Set these monsters face-down.</li>
     <li><strong>Offerings.</strong> Some monsters do something when they are offered for a summon, and an Altar Offering monster counts as two offerings.</li>
@@ -2537,8 +2538,12 @@ async function summon(G,pi,hi,tribs,set){
 }
 function canPlay(G,pi,id){const c=CARD(id),P=G.p[pi];if(G.phase!=='main')return false;if(c.kind==='t')return P.bz.includes(null);if(c.kind!=='s')return false;if(G.noSpell&&G.noSpell.turn===G.turnNo&&G.noSpell.pi===pi)return false;return c.can(G,pi);}
 async function setTrap(G,pi,hi){const P=G.p[pi],id=P.hand[hi],z=P.bz.indexOf(null);P.hand.splice(hi,1);P.bz[z]={c:CARD(id),face:false,turn:G.turnNo};say(G,`${G.names[pi]} sets a card in the back row.`);await G.onAnim({t:'set',pi});}
-async function playSpell(G,pi,hi,target){
-  const P=G.p[pi],id=P.hand[hi],c=CARD(id);P.hand.splice(hi,1);
+/* spells, equips and terrain can also be set face-down in the back row and activated from there in a later Main Phase, by either duelist of a team */
+function canPlaySet(G,pi,z){const b=G.p[pi].bz[z];if(!b||b.face||b.c.kind!=='s'||G.phase!=='main'||G.turn!==pi)return false;if(G.noSpell&&G.noSpell.turn===G.turnNo&&G.noSpell.pi===pi)return false;return b.c.can(G,pi);}
+async function playSet(G,pi,z,target){const P=G.p[pi],b=P.bz[z];if(!b)return;P.bz[z]=null;say(G,`${G.names[pi]} turns a set card face-up.`);await resolveSpell(G,pi,b.c.id,target);}
+async function playSpell(G,pi,hi,target){const P=G.p[pi],id=P.hand[hi];P.hand.splice(hi,1);await resolveSpell(G,pi,id,target);}
+async function resolveSpell(G,pi,id,target){
+  const P=G.p[pi],c=CARD(id);
   say(G,`${G.names[pi]} activates ${c.name}.`);await G.onAnim({t:'show',id,pi});
   const r=await trigger(G,opp(pi),'spell',{pi,id});
   if(r&&r.negate){say(G,`${c.name} is negated.`);if(r.steal!=null){G.p[r.steal].hand.push(id);say(G,`${G.names[r.steal]} takes ${c.name}.`);}else P.gy.push(id);return;}
@@ -3227,7 +3232,10 @@ const AI={trap(G,pi,list,trig,x){
   return list[0];}};
 async function aiTurn(G,pi){
   const P=G.p[pi],o=opp(pi),O=G.p[o];
-  async function spells(){let acted=true,n=0;while(acted&&!G.over&&n++<12){acted=false;for(let i=0;i<P.hand.length;i++){const c=CARD(P.hand[i]);if(c.kind!=='s'||!canPlay(G,pi,c.id))continue;const t=c.ai(G,pi);if(t===false||t===-1)continue;await playSpell(G,pi,i,t===true?null:t);acted=true;break;}}}
+  async function spells(){let acted=true,n=0;while(acted&&!G.over&&n++<12){acted=false;
+    for(let z=0;z<5&&!acted;z++){if(!canPlaySet(G,pi,z))continue;const c=P.bz[z].c,t=c.ai(G,pi);if(t===false||t===-1)continue;await playSet(G,pi,z,t===true?null:t);acted=true;}
+    if(acted)continue;
+    for(let i=0;i<P.hand.length;i++){const c=CARD(P.hand[i]);if(c.kind!=='s'||!canPlay(G,pi,c.id))continue;const t=c.ai(G,pi);if(t===false||t===-1)continue;await playSpell(G,pi,i,t===true?null:t);acted=true;break;}}}
   async function trySummon(){
     if(G.summons<1&&!P.hand.some(id=>{const c=CARD(id);return c.kind==='m'&&cardHas(c,'blink');}))return false;let best=null;
     const mine=P.mz.map((m,z)=>m?{z,a:m.face?atkOf(G,pi,z):m.c.atk,w:offerWorth(m)}:null).filter(Boolean).sort((a,b)=>a.a-b.a);
@@ -3243,6 +3251,7 @@ async function aiTurn(G,pi){
   if(!G.over)await spells();
   for(let z=0;z<5&&!G.over;z++){if(!canMeld(G,pi,z))continue;let b=-1,v=atkOf(G,pi,z);P.mz.forEach((x,k)=>{if(x&&k!==z&&x.face&&atkOf(G,pi,k)>v){v=atkOf(G,pi,k);b=k;}});if(b>=0)await meld(G,pi,z,b);}
   for(let i=P.hand.length-1;i>=0&&!G.over;i--)if(CARD(P.hand[i]).kind==='t'&&P.bz.includes(null))await setTrap(G,pi,i);
+  {let k=0;for(let i=P.hand.length-1;i>=0&&!G.over&&k<1;i--){const c=CARD(P.hand[i]);if(c.kind==='s'&&!c.terrain&&P.bz.filter(Boolean).length<4&&P.hand.length>3){await setTrap(G,pi,i);k++;}}}
   for(let z=0;z<5&&!G.over;z++){const m=P.mz[z];if(!m||m.posChanged)continue;const es=foeTop(G,pi);
     if(!m.face){if(m.c.atk>es&&m.c.atk>=1200)await changePos(G,pi,z);}
     else if(m.pos==='atk'&&es>atkOf(G,pi,z)&&defOf(G,pi,z)>atkOf(G,pi,z))await changePos(G,pi,z);
@@ -3740,12 +3749,13 @@ function actions(){
   const out=[];if(!myTurn()||!sel)return out;const P=G.p[0];
   if(sel.src==='hand'){const i=sel.i,id=P.hand[i];if(id==null)return out;const c=CARD(id);
     if(c.kind==='m'){if(canSummon(G,0,id))out.push(['Summon in Attack',()=>doSummon(i,false)],['Set face-down in Defense',()=>doSummon(i,true)]);}
-    else if(c.kind==='s'){if(canPlay(G,0,id))out.push(['Activate',()=>doSpell(i)]);}
+    else if(c.kind==='s'){if(canPlay(G,0,id))out.push(['Activate',()=>doSpell(i)]);if(G.phase==='main'&&P.bz.includes(null))out.push(['Set face-down in back row',()=>act(()=>setTrap(G,0,i))]);}
     else if(canPlay(G,0,id))out.push(['Set in back row',()=>act(()=>setTrap(G,0,i))]);
   }else if(sel.side===0&&sel.row==='m'){const z=sel.z,m=P.mz[z];if(m){
     if(canChange(G,0,z))out.push([!m.face?'Flip face-up into Attack':m.pos==='atk'?'Switch to Defense':'Switch to Attack',()=>act(()=>changePos(G,0,z))]);
     if(canMeld(G,0,z))out.push(['Merge into another monster',()=>doMeld(z)]);
     if(canAttack(G,0,z))out.push(['Attack',()=>doAttack(z)]);}}
+  else if(sel.side===0&&sel.row==='b'){const z=sel.z;if(canPlaySet(G,0,z))out.push(['Activate',()=>doSpell(-1,z)]);}
   return out;
 }
 function ask(text,valid,extra){return new Promise(res=>{pending={text,valid,extra:extra||[],res:v=>{pending=null;res(v);}};refresh();});}
@@ -3756,15 +3766,15 @@ async function doSummon(i,set){
     const v=await ask(`Choose a monster to offer for ${c.name} (${n-need+1} of ${n}). An Altar Offering monster counts as 2.`,valid);if(!v){refresh();return;}tribs.push(v.z);need-=offerWorth(G.p[0].mz[v.z]);}
   sfx('play',.5);act(()=>summon(G,0,i,tribs,set));
 }
-async function doSpell(i){
-  const c=CARD(myHand()[i]);let t=null;
+async function doSpell(i,bz){
+  const c=bz!=null?G.p[0].bz[bz].c:CARD(myHand()[i]);let t=null;
   if(c.tg){const valid=[];
     if(c.tg==='own')G.p[0].mz.forEach((m,z)=>{if(m&&m.face&&(!c.ok||c.ok(m)))valid.push({side:0,row:'m',z});});
     if(c.tg==='enemy')G.p[1].mz.forEach((m,z)=>{if(m&&(!c.okE||c.okE(m)))valid.push({side:1,row:'m',z});});
     if(c.tg==='enemyBack')G.p[1].bz.forEach((b,z)=>{if(b)valid.push({side:1,row:'b',z});});
     const extra=c.tg==='enemyBack'?valid.map(x=>({label:'Enemy back row card '+(x.z+1),value:x})):[];
     const v=await ask(`Choose a target for ${c.name}.`,valid,extra);if(!v){refresh();return;}t=v.z;}
-  sfx('play',.5);act(()=>playSpell(G,0,i,t));
+  sfx('play',.5);act(()=>bz!=null?playSet(G,0,bz,t):playSpell(G,0,i,t));
 }
 async function doMeld(z){
   const valid=[];G.p[0].mz.forEach((m,k)=>{if(m&&k!==z&&m.face)valid.push({side:0,row:'m',z:k});});
@@ -4028,18 +4038,24 @@ function vrBuild(){
       const bt=tile(VS*.93,VS*.62,xx,zb,()=>bzEl[side][z].tile.click());const bc=vrPlane(VS*.42,VS*.58,cbTex,{flat:true});bc.position.set(xx,.006,zb);bc.visible=false;T.add(bc);VR.bz[side][z]={tile:bt,card:bc};
     }
     const tx=-3*VS,tt=tile(VS*.93,VS*1.6,tx,sg*.2,()=>tzEl[side].tile.click());const tl=vrLabel(VS*.9,VS*.3,256);tl.mesh.rotation.x=-Math.PI/2;tl.mesh.position.set(tx,.007,sg*.2);T.add(tl.mesh);VR.tz[side]={tile:tt,lab:tl};
-    const dx=3*VS,box=new THREE.Mesh(new THREE.BoxGeometry(VS*.6,1,VS*.84),[0,1,2,3,4,5].map(i=>new THREE.MeshBasicMaterial(i===2?{map:cbTex}:{color:0x231c4a})));box.position.set(dx,.02,sg*.2);T.add(box);
-    const dl=vrLabel(VS*.62,VS*.24,160);dl.mesh.position.set(dx,.14,sg*.2);T.add(dl.mesh);
-    if(side===0){box.userData.deck=true;box.userData.click=()=>{if(VR.pendingDraw>0)vrDrawDone();};VR.click.push(box);}
+    const dx=3*VS,box=new THREE.Mesh(new THREE.BoxGeometry(VS*.6,1,VS*.84),[0,1,2,3,4,5].map(i=>new THREE.MeshBasicMaterial(i===2?{map:cbTex}:{color:0x231c4a})));
+    const dl=vrLabel(VS*.62,VS*.24,160);
+    if(side===1){box.position.set(dx,.02,sg*.2);T.add(box);dl.mesh.position.set(dx,.14,sg*.2);T.add(dl.mesh);}
+    else{   /* your own deck floats free: grip it to move it, drop it on your other hand to wear it there */
+      const DG=VR.deckG=new THREE.Group();rig.add(DG);const inner=VR.deckIn=new THREE.Group();DG.add(inner);inner.add(box);inner.add(dl.mesh);dl.mesh.position.set(0,.14,0);
+      const base=vrPlane(VS*.74,VS*.98,null,{flat:true,color:0xd9b24a});base.position.y=-.004;inner.add(base);
+      box.userData.deck=true;box.userData.click=()=>{if(VR.pendingDraw>0)vrDrawDone();};VR.click.push(box);VR.deckDock=-1;}
     const chTex=[0,1].map(()=>{const t=vrTex(vrVarImg('--chibi'),true);t.repeat.set(1/6,1/80);return t;});
     const ch=chTex.map((t,i)=>{const p=vrPlane(.075,.108,t,{feet:true,alphaTest:.3});p.position.set(dx+(i?.05:-.03),.004,sg*(.2+.14));T.add(p);return p;});
     VR.deck[side]={box,lab:dl,ch,chTex};
   }
   /* duelists across the table and beside you, as tall portrait standees with speech */
-  VR.port=[];
-  for(const [side,k,x,z,h] of [[1,0,-.28,-1.75,1.15],[1,1,.42,-1.75,1.15],[0,1,-1.0,-.62,1.0]]){const tex=vrTex(vrClassImg('avs-0'),true);tex.repeat.set(.25,.25);const p=vrPlane(h,h,tex,{feet:true,alphaTest:.3});p.position.set(x,-.75,z);if(side===0)p.rotation.y=.9;root.add(p);
-    const say=vrLabel(.62,.2,512);say.mesh.position.set(x,-.75+h+.16,z);if(side===0)say.mesh.rotation.y=.9;root.add(say.mesh);say.mesh.visible=false;VR.port.push({side,k,p,tex,say,sheet:-1});}
-  VR.mySay=vrLabel(.5,.16,512);VR.mySay.mesh.position.set(-.5,.34,-.38);VR.mySay.mesh.rotation.y=.5;root.add(VR.mySay.mesh);VR.mySay.mesh.visible=false;
+  VR.port=[];   /* the other duelists stand on the floor at life size, wherever the table's edges are */
+  for(const [side,k,x,z,h] of [[1,0,-.28,-1.75,1.6],[1,1,.42,-1.75,1.6],[0,1,-1.0,-.62,1.6]]){const tex=vrTex(vrClassImg('avs-0'),true);tex.repeat.set(.25,.25);const p=vrPlane(h,h,tex,{feet:true,alphaTest:.3});scene.add(p);
+    const say=vrLabel(.7,.22,512);scene.add(say.mesh);say.mesh.visible=false;VR.port.push({side,k,p,tex,say,sheet:-1,x,z,h});}
+  VR.mySay=vrLabel(.5,.16,512);VR.mySay.mesh.position.set(-.5,.34,-.38);VR.mySay.mesh.rotation.y=.5;rig.add(VR.mySay.mesh);VR.mySay.mesh.visible=false;
+  /* Tier 7 and 8 monsters stand on the floor beside the table as giants */
+  VR.giant=[[],[]];for(const side of [0,1])for(let z=0;z<5;z++){const g=vrPlane(1,1,VR.mz[side][z].stand.material.map,{feet:true,alphaTest:.3});g.visible=false;g.userData.click=h=>VR.mz[side][z].tile.userData.click(h);scene.add(g);VR.click.push(g);VR.giant[side][z]=g;}
   /* Life totals floating over each side */
   VR.life=[0,1].map(side=>{const l=vrLabel(.3,.085,384);l.mesh.position.set(-.52,.3,side?-1.2:-.36);l.mesh.rotation.y=.35;root.add(l.mesh);return l;});
   /* hand, selected card, control panel */
@@ -4058,30 +4074,47 @@ function vrBuild(){
   VR.ray=new THREE.Raycaster();
 }
 /* put the hand and the panel back at their starting places, and the table back to its normal size */
-function vrHome(){VR.handG.position.set(0,.1,-.28);VR.handG.rotation.set(0,0,0);VR.panelG.position.set(.74,.3,-.66);VR.panelG.rotation.set(0,-.6,0);VR.root.scale.setScalar(1);}
+function vrHome(){VR.handG.position.set(0,.1,-.28);VR.handG.rotation.set(0,0,0);VR.panelG.position.set(.74,.3,-.66);VR.panelG.rotation.set(0,-.6,0);vrTableHome();
+  if(VR.deckG){if(VR.deckG.parent!==VR.rig)VR.rig.add(VR.deckG);VR.deckDock=-1;VR.deckG.position.set(.5,.05,-.46);VR.deckG.rotation.set(0,0,0);VR.deckG.scale.setScalar(1);}}
+/* the table back where it started: in front of you at its normal size */
+function vrTableHome(){VR.root.position.copy(VR.rig.position);VR.root.rotation.copy(VR.rig.rotation);VR.root.scale.setScalar(1);}
 const vrPulse=(ci,s,ms)=>{try{const src=VR.ctrl&&VR.ctrl[ci]&&VR.ctrl[ci].userData.src,h=src&&src.gamepad&&src.gamepad.hapticActuators&&src.gamepad.hapticActuators[0];if(h&&h.pulse)h.pulse(s,ms);}catch(e){}};
 /* --- grabbing with the grip button: the table (which stays level), the hand, the panel --- */
-function vrGrabStart(ci,obj,upright){const c=VR.ctrl[ci];obj.updateMatrixWorld(true);c.updateMatrixWorld(true);VR.grab[ci]={obj,upright,off:new THREE.Matrix4().copy(c.matrixWorld).invert().multiply(obj.matrixWorld)};}
+function vrGrabStart(ci,obj,upright){const c=VR.ctrl[ci];obj.updateMatrixWorld(true);c.updateMatrixWorld(true);VR.grab[ci]={obj,upright,off:new THREE.Matrix4().copy(c.matrixWorld).invert().multiply(obj.matrixWorld),p0:new THREE.Vector3().setFromMatrixPosition(c.matrixWorld),r0:obj.position.clone()};}
 function vrGrabStep(ci){
-  const g=VR.grab[ci];if(!g||!g.obj)return;const c=VR.ctrl[ci],M=new THREE.Matrix4().multiplyMatrices(c.matrixWorld,g.off),p=new THREE.Vector3(),q=new THREE.Quaternion(),s=new THREE.Vector3();M.decompose(p,q,s);
+  const g=VR.grab[ci];if(!g||!g.obj)return;
+  if(g.obj===VR.root){   /* the table slides with your hand and never swings; the stick raises, lowers and turns it */
+    const c0=VR.ctrl[ci],p=new THREE.Vector3().setFromMatrixPosition(c0.matrixWorld),gp=c0.userData.src&&c0.userData.src.gamepad,dt=VR.dt||.016;let sx=0,sy=0;
+    if(gp&&gp.axes){sx=gp.axes.length>=4?gp.axes[2]:(gp.axes[0]||0);sy=gp.axes.length>=4?gp.axes[3]:(gp.axes[1]||0);}
+    if(Math.abs(sy)>.25)g.r0.y-=sy*dt*.9*Math.max(1,VR.root.scale.x*.5);if(Math.abs(sx)>.25)VR.root.rotation.y-=sx*dt*1.3;
+    VR.root.position.copy(g.r0).add(p).sub(g.p0);
+    if(VR.scaling){const a=new THREE.Vector3().setFromMatrixPosition(VR.ctrl[0].matrixWorld),b=new THREE.Vector3().setFromMatrixPosition(VR.ctrl[1].matrixWorld);VR.root.scale.setScalar(Math.max(.25,Math.min(30,VR.scaling.s0*a.distanceTo(b)/Math.max(.05,VR.scaling.d0))));}
+    VR.root.updateMatrixWorld(true);return;}
+  const c=VR.ctrl[ci],M=new THREE.Matrix4().multiplyMatrices(c.matrixWorld,g.off),p=new THREE.Vector3(),q=new THREE.Quaternion(),s=new THREE.Vector3();M.decompose(p,q,s);
   if(g.upright){const e=new THREE.Euler().setFromQuaternion(q,'YXZ');q.setFromEuler(new THREE.Euler(0,e.y,0,'YXZ'));}
   if(g.obj===VR.root&&VR.scaling){const a=new THREE.Vector3().setFromMatrixPosition(VR.ctrl[0].matrixWorld),b=new THREE.Vector3().setFromMatrixPosition(VR.ctrl[1].matrixWorld);s.setScalar(Math.max(.25,Math.min(30,VR.scaling.s0*a.distanceTo(b)/Math.max(.05,VR.scaling.d0))));}
   const W2=new THREE.Matrix4().compose(p,q,s),par=g.obj.parent;if(par&&par!==VR.scene){par.updateMatrixWorld(true);W2.premultiply(new THREE.Matrix4().copy(par.matrixWorld).invert());}
   W2.decompose(g.obj.position,g.obj.quaternion,g.obj.scale);g.obj.updateMatrixWorld(true);
 }
 function vrSqueezeStart(ci){
-  const c=VR.ctrl[ci],h=vrPick(c),o=h&&h.object,ot=1-ci,d=o?o.userData:{};
+  const c=VR.ctrl[ci],ot=1-ci;
+  {const cp=new THREE.Vector3().setFromMatrixPosition(c.matrixWorld),dp=new THREE.Vector3();VR.deckG.getWorldPosition(dp);
+   if(cp.distanceTo(dp)<.16&&VR.deckDock!==ci){if(VR.pendingDraw>0)vrDrawStart(ci);else{if(VR.deckDock>=0){VR.rig.attach(VR.deckG);VR.deckDock=-1;}vrGrabStart(ci,VR.deckG,false);}vrPulse(ci,.4,40);return;}}
+  const h=vrPick(c),o=h&&h.object,d=o?o.userData:{};
   if(VR.grab[ot]&&VR.grab[ot].obj===VR.root&&!(d.card||d.handle||d.deck||o===VR.panel)){   /* second hand on the table: stretch to resize */
     const a=new THREE.Vector3().setFromMatrixPosition(VR.ctrl[0].matrixWorld),b=new THREE.Vector3().setFromMatrixPosition(VR.ctrl[1].matrixWorld);VR.scaling={d0:a.distanceTo(b),s0:VR.root.scale.x};VR.grab[ci]={scaleOnly:true};vrPulse(ci,.4,40);return;}
   if(!o)return;
-  if(d.handle)vrGrabStart(ci,VR.handG,false);else if(o===VR.panel)vrGrabStart(ci,VR.panelG,false);else if(d.card)vrHoldStart(ci,d.idx);else if(d.deck)vrDrawStart(ci);else if(d.table)vrGrabStart(ci,VR.root,true);else return;
+  if(d.handle)vrGrabStart(ci,VR.handG,false);else if(o===VR.panel)vrGrabStart(ci,VR.panelG,false);else if(d.card)vrHoldStart(ci,d.idx);else if(d.deck){if(VR.pendingDraw>0)vrDrawStart(ci);else if(VR.deckDock!==ci){if(VR.deckDock>=0){VR.rig.attach(VR.deckG);VR.deckDock=-1;}vrGrabStart(ci,VR.deckG,false);}}else if(d.table)vrGrabStart(ci,VR.root,true);else return;
   vrPulse(ci,.4,40);
 }
 function vrSqueezeEnd(ci){
   const ot=1-ci,g=VR.grab[ci];
   if(VR.held&&VR.held.ci===ci)vrHoldEnd();
   if(VR.drawing&&VR.drawing.ci===ci)vrDrawEnd();
-  if(g){VR.grab[ci]=null;if(g.scaleOnly){VR.scaling=null;if(VR.grab[ot]&&VR.grab[ot].obj===VR.root)vrGrabStart(ot,VR.root,true);}else if(g.obj===VR.root&&VR.scaling){VR.scaling=null;VR.grab[ot]=null;}}
+  if(g&&g.obj===VR.deckG){   /* let go of the deck next to your other hand and it stays on that hand */
+    const a=new THREE.Vector3(),b=new THREE.Vector3().setFromMatrixPosition(VR.ctrl[ot].matrixWorld);VR.deckG.getWorldPosition(a);
+    if(VR.ctrl[ot].visible&&a.distanceTo(b)<.2){VR.ctrl[ot].add(VR.deckG);VR.deckG.position.set(0,.02,.11);VR.deckG.rotation.set(-.5,0,0);VR.deckDock=ot;vrPulse(ot,.6,60);}}
+  if(g){VR.grab[ci]=null;if(g.scaleOnly){VR.scaling=null;}else if(g.obj===VR.root&&VR.scaling){VR.scaling=null;VR.grab[ot]=null;}}
 }
 /* --- holding a hand card: stick chooses how to play it, holding the trigger confirms --- */
 function vrHoldStart(ci,i){
@@ -4128,7 +4161,7 @@ function vrPanel(){
     c.fillStyle=dis?'#c9c6d6':kind==='quiet'?'#adb7c4':kind==='go'?'#ffa61f':'#267ae9';c.fillRect(x,y,w,h);c.strokeStyle='#1b1a2b';c.lineWidth=4;c.strokeRect(x,y,w,h);c.fillStyle=dis?'#6b6880':(kind==='quiet'||kind==='go')?'#1b1a2b':'#fff';c.textBaseline='middle';c.fillText(label,x+22,y+h/2+1);c.textBaseline='top';
     if(!dis)VR.regions.push({x,y,w,h,fn});x+=w+14;};
   for(const b of btns){const lab=(b.querySelector('strong')||b).textContent.trim();if(!lab)continue;add(lab,()=>b.click(),b.disabled,b.id==='toBattle'||b.id==='endTurn'||b.id==='summon'?'go':b.classList.contains('quiet')?'quiet':'');}
-  x=28;y+=74;if(!modal){add('Recentre',()=>{VR.placed=false;vrHome();},false,'quiet');add(VR.inline?'Leave 3D view':'Leave VR',()=>{if(VR.session)VR.session.end();else leave3D();},false,'quiet');}
+  x=28;y+=74;if(!modal){add('Reset table',()=>{vrTableHome();},false,'quiet');add('Recentre all',()=>{VR.placed=false;vrHome();},false,'quiet');add(VR.inline?'Leave 3D view':'Leave VR',()=>{if(VR.session)VR.session.end();else leave3D();},false,'quiet');}
   c.fillStyle='#55546b';c.font='500 22px Figtree,"Trebuchet MS",sans-serif';let ly=Hp-26-logs.length*28;for(const l of logs){c.fillText(l.length>84?l.slice(0,82)+'…':l,28,ly);ly+=28;}
   VR.ptex.needsUpdate=true;
 }
@@ -4138,16 +4171,23 @@ function vrSync(camLocal){
   for(const side of [0,1]){const P=G.p[side],sg=side===0?1:-1;
     for(let z=0;z<5;z++){const V=VR.mz[side][z],Z=zv[side][z],m=P.mz[z],cl=Z.el.classList;
       V.tile.material.color.setHex(cl.contains('valid')?0x3fbf7a:cl.contains('sel')?0x8a6cff:cl.contains('target')?0xd9455f:V.tile.userData.base);
-      if(m&&m.face){const h=(m.c.lv>=7?.34:.15+.022*m.c.lv),dying=cl.contains('dying');V.fade+=((dying?0:1)-V.fade)*.25;V.off+=((cl.contains('acting')?-sg*.07:0)-V.off)*.3;
-        V.stand.visible=true;V.down.visible=false;V.stand.scale.set(h*1.0,h*Math.max(.05,V.fade),1);V.stand.position.z=sg*.105+V.off;V.stand.material.map.needsUpdate=true;
+      const GI=VR.giant[side][z];
+      if(m&&m.face){const big=m.c.lv>=7,h=.12+.047*m.c.lv,dying=cl.contains('dying'),acting=cl.contains('acting');V.fade+=((dying?0:1)-V.fade)*.25;V.off+=((acting?-sg*.07:0)-V.off)*.3;
+        V.stand.visible=!big;V.down.visible=false;V.stand.scale.set(h,h*Math.max(.05,V.fade),1);V.stand.position.z=sg*.105+V.off;V.stand.material.map.needsUpdate=true;
         if(camLocal){const wx=V.stand.position.x,wz=V.stand.position.z+T.position.z;V.stand.rotation.y=Math.atan2(camLocal.x-wx,camLocal.z-wz);}
+        GI.visible=big;if(big){   /* a boss leaves its tile and stands on the floor at its owner's side of the table */
+          const rank=P.mz.slice(0,z).filter(x=>x&&x.face&&x.c.lv>=7).length,fl=rank%2?1:-1,ring=Math.floor(rank/2),H=m.c.lv>=8?3.2:2.4;
+          const lp=side===0?new THREE.Vector3(fl*(1.0+ring*.55),0,-.62-ring*.2+(acting?-.25:0)):new THREE.Vector3(fl*(1.05+ring*.6),0,-1.95-ring*.25+(acting?.3:0));
+          const wp2=VR.root.localToWorld(lp),s=Math.max(1,Math.sqrt(VR.root.scale.x));GI.position.set(wp2.x,VR.groundY||0,wp2.z);GI.scale.set(H*s,H*s*Math.max(.05,V.fade),1);
+          if(VR.camW)GI.rotation.y=Math.atan2(VR.camW.x-wp2.x,VR.camW.z-wp2.z);}
         V.lab.set(Z.st.textContent+(m.poison?' PSN':''),{bg:m.pos==='def'?'#1e4f7a':'#7a1e2e',size:.62});}
-      else{V.stand.visible=false;V.fade=1;V.off=0;V.down.visible=!!m;V.down.rotation.z=m?Math.PI/2:0;V.lab.set(m&&side===0?m.c.name:'',{bg:'#2b2850',size:.5});}
+      else{GI.visible=false;V.stand.visible=false;V.fade=1;V.off=0;V.down.visible=!!m;V.down.rotation.z=m?Math.PI/2:0;V.lab.set(m&&side===0?m.c.name:'',{bg:'#2b2850',size:.5});}
       const B=VR.bz[side][z],b=P.bz[z],bcl=bzEl[side][z].el.classList;B.card.visible=!!b;B.tile.material.color.setHex(bcl.contains('valid')?0x3fbf7a:bcl.contains('sel')?0x8a6cff:0x221f45);
     }
     const tz=P.tz,TZ=VR.tz[side],tcl=tzEl[side].el.classList;TZ.tile.material.color.set(tcl.contains('valid')?'#3fbf7a':tz?elColor(tz.c):'#221f45');TZ.lab.set(tz?tz.c.name:'Terrain',{color:tz?'#ffffff':'#8a88a8',size:.34});
-    const D=VR.deck[side],n=P.deck.length,hgt=Math.max(.004,n*.0022);D.box.scale.y=hgt;D.box.position.y=hgt/2;D.box.visible=n>0;D.lab.set(side===0&&VR.pendingDraw>0?'Draw!':String(n),{bg:side===0&&VR.pendingDraw>0?'#ffa61f':'#17132e',color:side===0&&VR.pendingDraw>0?'#1b1a2b':'#fff',size:.7});D.lab.mesh.position.y=hgt+.05;
-    if(camLocal)D.lab.mesh.rotation.y=Math.atan2(camLocal.x-D.lab.mesh.position.x,camLocal.z-(D.lab.mesh.position.z+T.position.z));
+    const D=VR.deck[side],n=P.deck.length,hgt=Math.max(.004,n*.0022);D.box.scale.y=hgt;D.box.position.y=hgt/2;D.box.visible=n>0;
+    if(side===0){const free=VR.deckDock<0&&!(VR.grab[0]&&VR.grab[0].obj===VR.deckG)&&!(VR.grab[1]&&VR.grab[1].obj===VR.deckG);VR.deckIn.position.y=free&&!reduce?Math.sin(now/620)*.009:0;VR.deckIn.rotation.y=free&&!reduce?Math.sin(now/1900)*.12:0;}D.lab.set(side===0&&VR.pendingDraw>0?'Draw!':String(n),{bg:side===0&&VR.pendingDraw>0?'#ffa61f':'#17132e',color:side===0&&VR.pendingDraw>0?'#1b1a2b':'#fff',size:.7});D.lab.mesh.position.y=hgt+.05;
+    if(camLocal&&side===1)D.lab.mesh.rotation.y=Math.atan2(camLocal.x-D.lab.mesh.position.x,camLocal.z-(D.lab.mesh.position.z+T.position.z));
     for(const k of [0,1]){const ch=D.ch[k],show=k===0||!!G.tag;ch.visible=show;if(!show)continue;const a=AVS[side][k],act=(G.tag?G.tag.cur[side]:0)===k&&G.turn===side&&!G.over,f=act?[1,0,1,2][Math.floor(now/220)%4]:1;
       D.chTex[k].offset.set(((side===0?3:0)+f)/6,1-(a+1)/80);ch.material.opacity=1;ch.material.color.setHex((G.tag?G.tag.cur[side]:0)===k?0xffffff:0x888899);}
     VR.life[side].set((side?'Enemy ':'Your ')+'Life '+P.lp,{bg:P.lp<=2000?'#8e1b2d':'#17132e',color:'#ffe9a8',size:.6});
@@ -4160,6 +4200,8 @@ function vrSync(camLocal){
   for(const Pt of VR.port){const show=Pt.k===0||!!G.tag;Pt.p.visible=show;if(!show){Pt.say.mesh.visible=false;continue;}const a=AVS[Pt.side][Pt.k],sheet=Math.floor(a/16),cell=a%16;
     if(Pt.sheet!==sheet){Pt.sheet=sheet;const im=vrClassImg('avs-'+sheet);Pt.tex.image=im;if(im.complete&&im.naturalWidth)Pt.tex.needsUpdate=true;else im.addEventListener('load',()=>{Pt.tex.needsUpdate=true;});}
     Pt.tex.offset.set((cell%4)/4,1-(Math.floor(cell/4)+1)/4);
+    {const w=VR.root.localToWorld(new THREE.Vector3(Pt.x,0,Pt.z)),gy=VR.groundY||0;Pt.p.position.set(w.x,gy,w.z);Pt.say.mesh.position.set(w.x,gy+Pt.h+.18,w.z);
+     if(VR.camW){const yw=Math.atan2(VR.camW.x-w.x,VR.camW.z-w.z);Pt.p.rotation.y=yw;Pt.say.mesh.rotation.y=yw;}}
     const sb=$('bar'+Pt.side).querySelector('.say'),mine=sb&&(sb.classList.contains('second')?1:0)===Pt.k;Pt.say.set(mine?sb.textContent:'',{bg:'#fffdf5',color:'#1b1a2b',wrap:true});}
   {const sb=$('bar0').querySelector('.say:not(.second)');VR.mySay.set(sb?sb.textContent:'',{bg:'#fffdf5',color:'#1b1a2b',wrap:true});}
   /* your hand: a fan of full card faces along the near edge of the table */
@@ -4185,10 +4227,10 @@ function vrSync(camLocal){
 }
 function vrPick(obj){VR.ray.ray.origin.setFromMatrixPosition(obj.matrixWorld);VR.ray.ray.direction.set(0,0,-1).transformDirection(obj.matrixWorld);return VR.ray.intersectObjects(VR.click.filter(o=>o.visible),false)[0]||null;}
 function vrFrame(time){
-  VR.frames++;if(VR.tick)VR.tick(time);
-  const cam=VR.cam,wp=new THREE.Vector3();cam.getWorldPosition(wp);
+  VR.frames++;VR.dt=Math.min(.1,(time-(VR.last||time))/1000);VR.last=time;if(VR.tick)VR.tick(time);
+  const cam=VR.cam,wp=new THREE.Vector3();cam.getWorldPosition(wp);VR.camW=wp;
   if(!VR.placed&&VR.frames>8){VR.placed=true;const d=new THREE.Vector3();cam.getWorldDirection(d);const yaw=Math.atan2(-d.x,-d.z);
-    for(const g of [VR.root,VR.rig]){g.rotation.set(0,yaw,0);g.position.set(wp.x,wp.y-.52,wp.z);}VR.groundY=VR.floor?0:wp.y-1.55;}
+    VR.rig.rotation.set(0,yaw,0);VR.rig.position.set(wp.x,wp.y-.52,wp.z);vrTableHome();VR.groundY=VR.floor?0:wp.y-1.55;}
   for(const ci of [0,1])vrGrabStep(ci);vrHoldStep(time);vrDrawStep();
   VR.root.updateMatrixWorld(true);VR.rig.updateMatrixWorld(true);const local=VR.root.worldToLocal(wp.clone());
   try{vrSync(local);}catch(e){if(!VR.err){VR.err=e;console.error(e);}}
@@ -4213,6 +4255,7 @@ async function enterVR(ar){
     const mode=ar?'immersive-ar':'immersive-vr';let session;
     try{session=await navigator.xr.requestSession(mode,{optionalFeatures:['local-floor','bounded-floor','hand-tracking']});}
     catch(e1){if(/secur|permission|policy|allowed/i.test(String(e1&&(e1.name+' '+e1.message))))throw e1;session=await navigator.xr.requestSession(mode);}   /* some browsers reject the optional extras: ask again with none */
+    if(!VR.sharp){VR.sharp=true;for(const s of [0,1])for(let z=0;z<5;z++){const vw=zv[s][z].view,cv2=vw.ctx.canvas,k=Math.max(1,Math.min(3,512/Math.max(1,vw.cw)));vw.px*=k;vw.cw=Math.round(vw.cw*k);cv2.width=cv2.height=vw.cw;}}
     VR.session=session;VR.placed=false;VR.frames=0;VR.sig={};VR.err=null;VR.grab=[null,null];VR.scaling=null;VR.held=null;VR.drawing=null;VR.confirm=null;VR.pendingDraw=0;vrHome();
     session.addEventListener('end',()=>{if(VR.held)vrHoldEnd();if(VR.drawing)vrDrawEnd();VR.pendingDraw=0;VR.session=null;VR.renderer.setAnimationLoop(null);if(VR.resume)VR.resume();refresh();});
     try{VR.renderer.xr.setReferenceSpaceType('local-floor');await VR.renderer.xr.setSession(session);VR.floor=true;}
@@ -4233,7 +4276,7 @@ function enter3D(){
   if(VR.session||VR.inline)return;
   try{
     vrBuild();const r=vrRenderer(),cv=r.domElement;r.xr.enabled=false;VR.inline=true;VR.ar=false;VR.sig={};VR.err=null;VR.look={yaw:0,pitch:-.52};
-    VR.scene.background=new THREE.Color(0x0b0a1e);r.setClearColor(0x000000,1);for(const g of [VR.root,VR.rig]){g.position.set(0,.78,0);g.rotation.set(0,0,0);}vrHome();VR.groundY=0;VR.confirm=null;VR.pendingDraw=0;
+    VR.scene.background=new THREE.Color(0x0b0a1e);r.setClearColor(0x000000,1);for(const g of [VR.root,VR.rig]){g.position.set(0,.78,0);g.rotation.set(0,0,0);}vrHome();VR.groundY=0;VR.confirm=null;VR.pendingDraw=0;VR.camW=new THREE.Vector3(0,1.34,.02);
     cv.style.cssText='position:fixed;inset:0;width:100vw;height:100vh;z-index:40;touch-action:none;cursor:pointer';
     const size=()=>{r.setPixelRatio(Math.min(2,window.devicePixelRatio||1));r.setSize(window.innerWidth,window.innerHeight,false);VR.cam.aspect=window.innerWidth/Math.max(1,window.innerHeight);VR.cam.fov=window.innerWidth<window.innerHeight?88:62;VR.cam.updateProjectionMatrix();};size();VR.onSize=size;window.addEventListener('resize',size);
     const ex=$('leave3d');ex.hidden=false;
